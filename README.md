@@ -27,4 +27,4 @@ Requirements were generated with [`pipreqs`](https://github.com/bndr/pipreqs). T
 
     pip install -U "jax[cuda12_pip]"
 
-from the `install.sh` script. If you have a GPU that is not running CUDA, edit the installation command accordingly.
+from the `install.sh` script. If you have a GPU that is not running CUDA (or a different CUDA version), edit the above installation command accordingly.
