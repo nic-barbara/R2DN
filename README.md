@@ -10,19 +10,17 @@ Included are JAX implementations of each of the following robust neural models:
 
 Robust neural models are included in the `robustnn/` directory. Scripts used to generate the results in the paper are in the `examples/` directory.
 
-## Installation
+## Installation and Usage
 
-Create a [virtual python environment](https://docs.python.org/3/library/venv.html). Activate the virtual environment and install all dependencies in `requirements.txt` with
+To install the required dependencies and run the code, open a terminal in the root directory of this repository and enter the following commands.
 
-    python -m pip install -r requirements.txt
-    pip install -e .
+    ./install.sh
+    ./run.sh
 
-The second line installs the local package `robustnn` itself. The `requirements.txt` file was generated with [`pipreqs`](https://github.com/bndr/pipreqs). If you want to run JAX on an NVIDIA GPU, you'll also need to do the following:
+This will create a Python virtual environment and run all the experiments, process the results, and reproduce the figures from the paper.
+
+Requirements were generated with [`pipreqs`](https://github.com/bndr/pipreqs). The `install.sh` script assumes the user is running JAX on an NVIDIA GPU with CUDA 12. If no GPU is available, simply remove the line
 
     pip install -U "jax[cuda12_pip]"
 
-## Reproducing the Results
-
-Simply run the `run.sh` script in the root directory of this repository to run all the experiments, process the results, and reproduce the figures from the paper.
-
-    ./run.sh
+from the `install.sh` script. If you have a GPU that is not running CUDA, edit the installation command accordingly. 
