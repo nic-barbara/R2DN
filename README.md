@@ -19,8 +19,12 @@ To install the required dependencies and run the code, open a terminal in the ro
 
 This will create a Python virtual environment and run all the experiments, process the results, and reproduce the figures from the paper.
 
+### A Note on Dependencies
+
+All code was tested and developed in Ubuntu 22.04 with CUDA 12.4 and Python 3.10.12.
+
 Requirements were generated with [`pipreqs`](https://github.com/bndr/pipreqs). The `install.sh` script assumes the user is running JAX on an NVIDIA GPU with CUDA 12. If no GPU is available, simply remove the line
 
     pip install -U "jax[cuda12_pip]"
 
-from the `install.sh` script. If you have a GPU that is not running CUDA, edit the installation command accordingly. 
+from the `install.sh` script. If you have a GPU that is not running CUDA, edit the installation command accordingly.
