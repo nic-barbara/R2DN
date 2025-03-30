@@ -50,7 +50,7 @@ def generate_data(rng, nx=1, batches=128, batchsize=512, uval=None):
             0.2 * jnp.sin(bw) + 
             0.05 * jnp.cos(2*bw) + 
             0.05 * jnp.sin(3*bw) + 
-            0.075 * jnp.sin(4*bw) * jnp.atan(0.1*bw**2)
+            0.075 * jnp.sin(4*x) * jnp.atan(0.1*bw**2)
         ) + 0.05*x + u
     
     x0_list = []
