@@ -5,7 +5,7 @@ This repository contains the code associated with the paper *Scalable Parameteri
 Included are JAX implementations of each of the following robust neural models:
 
 - The Sandwich layer and corresponding Lipschitz Bounded Deep Network from [Wang & Manchester (ICML 2023)](https://proceedings.mlr.press/v202/wang23v.html).
-- Contracting, Lipschitz, and (Q, S, R)-ribust Recurrent Equilibrium Networks (RENs) from [Revay, Wang, & Manchester (TAC 2023)](https://ieeexplore.ieee.org/document/10179161).
+- Contracting, Lipschitz, and (Q,S,R)-dissipative Recurrent Equilibrium Networks (RENs) from [Revay, Wang, & Manchester (TAC 2023)](https://ieeexplore.ieee.org/document/10179161).
 - Contracting Robust Recurrent Deep Networks (R2DNs) from our current work.
 
 Robust neural models are included in the `robustnn/` directory. Scripts used to generate the results in the paper are in the `examples/` directory.
