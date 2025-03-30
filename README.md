@@ -1,6 +1,6 @@
 # Robust Recurrent Deep Networks (R2DN)
 
-This repository contains the code associated with the paper *Scalable Parameterization of Contracting and Lipschitz Recurrent Deep Networks*.
+This repository contains the code associated with our paper *Scalable Parameterization of Contracting and Lipschitz Recurrent Deep Networks* (Barbara, Wang, & Manchester, 2025).
 
 Included are JAX implementations of each of the following robust neural models:
 
