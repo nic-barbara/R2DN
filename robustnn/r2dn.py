@@ -243,7 +243,8 @@ class ContractingR2DN(nn.Module):
             gamma=self._gamma,
             activation=self.activation,
             kernel_init=self.kernel_init,
-            bias_init=self.network_bias_init
+            bias_init=self.network_bias_init,
+            param_dtype=self.param_dtype
         )
         
     def __call__(self, state: Array, inputs: Array) -> Tuple[Array, Array]:

@@ -16,10 +16,7 @@ import optax
 
 startup_plotting()
 dirpath = Path(__file__).resolve().parent
-
-# Go for maximum precision for these metrics
 jax.config.update("jax_default_matmul_precision", "highest")
-jax.config.update("jax_enable_x64", True)
 
 # Training hyperparameters
 config = {
