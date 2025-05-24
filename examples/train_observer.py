@@ -17,7 +17,6 @@ dirpath = Path(__file__).resolve().parent
 jax.config.update("jax_default_matmul_precision", "highest")
 
 # Training hyperparameters
-# Tune these. 1e-5 is the benchmark tolerance
 ren_config = {
     "experiment": "pde",
     "network": "contracting_ren",
