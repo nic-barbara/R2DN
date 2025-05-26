@@ -23,8 +23,4 @@ This will create a Python virtual environment and run all the experiments, proce
 
 All code was tested and developed in Ubuntu 22.04 with CUDA 12.4 and Python 3.10.12.
 
-Requirements were generated with [`pipreqs`](https://github.com/bndr/pipreqs). The `install.sh` script assumes the user is running JAX on an NVIDIA GPU with CUDA 12 already installed. If no GPU is available, simply remove the line
-
-    pip install -U "jax[cuda12_pip]"
-
-from the `install.sh` script. If you have a GPU that is not running CUDA (or a different CUDA version), edit the above installation command accordingly.
+Requirements were generated with [`pipreqs`](https://github.com/bndr/pipreqs). The `install.sh` script assumes the user is running JAX on an NVIDIA GPU with CUDA 12 already installed. If no GPU is available, simply remove the `[cuda12_pip]` option when installing JAX. If you have a GPU that is not running CUDA (or a different CUDA version), edit the installation command accordingly.
