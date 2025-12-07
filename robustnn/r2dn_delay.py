@@ -17,10 +17,10 @@ def get_valid_init():
     return ["random", "long_memory"]
 
 @dataclass
-class DirectR2DNParams:
-    """Data class to keep track of direct params for R2DN.
+class DirectR2DDNParams:
+    """Data class to keep track of direct params for R2DDN.
     
-    These are the free, trainable parameters for an R2DN,
+    These are the free, trainable parameters for an R2DDN,
     excluding those in the LBDN layer.
     """
     p: Array
@@ -41,10 +41,10 @@ class DirectR2DNParams:
 
 
 @dataclass
-class ExplicitR2DNParams:
-    """Data class to keep track of explicit params for R2DN.
+class ExplicitR2DDNParams:
+    """Data class to keep track of explicit params for R2DDN.
     
-    These are the parameters used for evaluating an R2DN.
+    These are the parameters used for evaluating an R2DDN.
     """
     A: Array
     B1: Array
@@ -61,7 +61,11 @@ class ExplicitR2DNParams:
     network_params: lbdn.ExplicitLBDNParams
     
     
-class ContractingR2DN(nn.Module):
+class ContractingR2DDN(nn.Module):
+    """TODO: Documentation.
+    
+    NOTE: Currently assumes nv = nw.
+    """
     
     input_size: int             # nu
     state_size: int             # nx
@@ -88,7 +92,7 @@ class ContractingR2DN(nn.Module):
     _gamma: jnp.float32 = 1.0 # type: ignore
     
     def setup(self):
-        """Initialise all direct params for an R2DN and store."""
+        """Initialise all direct params for an R2DDN and store."""
         
         if self.init_method not in get_valid_init():
             raise ValueError("Undefined init method '{}'".format(self.init_method))
@@ -124,6 +128,11 @@ class ContractingR2DN(nn.Module):
         X = self.param("X", x_init, (2*nx, 2*nx), dtype)
         p = self.param("p", init.constant(l2_norm(X, eps=self.eps)), (1,), dtype)
         
+        # TODO: Initialise D11 like the REN's D22
+        # TODO: I guess start it at 0? Who knows...
+        # TODO: Will need extra implicit params to do this.
+        D11 = 0
+        
         # Output layer params
         if self.init_output_zero:
             out_kernel_init = init.zeros_init()
@@ -143,14 +152,14 @@ class ContractingR2DN(nn.Module):
             D21 = self.param("D21", out_kernel_init, (ny, nv), dtype)
             D22 = self.param("D22", init.zeros_init(), (ny, nu), dtype)
             
-        self.direct = DirectR2DNParams(
-            p, X, Y, B1, B2, C1, D12, C2, D21, D22, bx, bv, by, self.network.direct
+        self.direct = DirectR2DDNParams(
+            p, X, Y, B1, B2, C1, D11, D12, C2, D21, D22, bx, bv, by, self.network.direct
         )        
     
     def _x_long_memory_init(self):
         """Initialise the X matrix so A is close to the identity.
         
-        Assumes B1, C1 = 0 and Y = E = I.
+        Assumes B1, C1, D11 = 0 and Y = E = I.
         """
         def init_func(key, shape, dtype) -> Array:
             nx = self.state_size
@@ -187,7 +196,7 @@ class ContractingR2DN(nn.Module):
         )
         
     def __call__(self, state: Array, inputs: Array) -> Tuple[Array, Array]:
-        """Call an R2DN model
+        """Call an R2DDN model
 
         Args:
             state (Array): internal model state.
@@ -201,18 +210,20 @@ class ContractingR2DN(nn.Module):
         return self._explicit_call(state, inputs, explicit)
         
     def _explicit_call(
-        self, x: Array, u: Array, e: ExplicitR2DNParams
+        self, x: Array, u: Array, e: ExplicitR2DDNParams
     ) -> Tuple[Array, Array]:
-        """Evaluate explicit model for an R2DN.
+        """Evaluate explicit model for an R2DDN.
 
         Args:
             x (Array): internal model state.
             u (Array): model inputs.
-            e (ExplicitR2DNParams): explicit params.
+            e (ExplicitR2DDNParams): explicit params.
 
         Returns:
             Tuple[Array, Array]: (next_states, outputs).
         """
+        
+        # TODO: Will need to store v_{t-1} alongside the state
 
         # Equilibirum layer
         v = x @ e.C1.T + u @ e.D12.T + e.bv
@@ -224,7 +235,7 @@ class ContractingR2DN(nn.Module):
         return x1, y
     
     def _simulate_sequence(self, x0, u) -> Tuple[Array, Array]:
-        """Simulate an R2DN over a sequence of inputs.
+        """Simulate an R2DDN over a sequence of inputs.
 
         Args:
             x0: array of initial states, shape is (batches, ...).
@@ -233,6 +244,9 @@ class ContractingR2DN(nn.Module):
         Returns:
             Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
         """
+        
+        # TODO: Will need to store v_{t-1} alongside the state
+        
         explicit = self._direct_to_explicit()
         def rollout(carry, ut):
             xt, = carry
@@ -245,7 +259,7 @@ class ContractingR2DN(nn.Module):
     def initialize_carry(
         self, rng: jax.Array, input_shape: Tuple[int, ...]
     ) -> Array:
-        """Initialise the R2DN state (carry).
+        """Initialise the R2DDN state (carry).
 
         Args:
             rng (jax.Array): random seed for carry initialisation.
@@ -254,24 +268,40 @@ class ContractingR2DN(nn.Module):
         Returns:
             Array: initial model state.
         """
+        
+        # TODO: Will need to store v_{t-1} alongside the state
+        
         batch_dims = input_shape[:-1]
         rng, _ = jax.random.split(rng)
         mem_shape = batch_dims + (self.state_size,)
         return self.carry_init(rng, mem_shape, self.param_dtype)
         
-    def _direct_to_explicit(self) -> ExplicitR2DNParams:
-        """Convert from direct to explicit R2DN params.
+    def _direct_to_explicit(self) -> ExplicitR2DDNParams:
+        """Convert from direct to explicit R2DDN params.
 
         Args:
             None
 
         Returns:
-            ExplicitR2DNParams: explicit params for R2DN.
+            ExplicitR2DDNParams: explicit params for R2DDN.
         """
         ps = self.direct
         nx = self.state_size
+        nX = jnp.shape(ps.X)[0]
         
-        H = self._x_to_h_contracting(ps.X, ps.p, ps.B1, ps.C1)
+        # TODO: Construct D11 like the REN D22
+        D11 = ...
+        
+        # TODO: Update this for new construction (like Lipschitz REN)
+        H = ps.X.T @ ps.X
+        if self.do_polar_param:
+            H = ps.p**2 * H / (l2_norm(ps.X)**2)
+            
+        H = H + jnp.block([
+            [ps.C1.T @ ps.C1, jnp.zeros((nx, nx))],
+            [jnp.zeros((nx, nx)), B1 @ B1.T],
+        ]) + self.eps * jnp.identity(nX)
+        
         H11 = H[:nx, :nx]
         H21 = H[nx:, :nx]
         H22 = H[nx:, nx:]
@@ -280,51 +310,28 @@ class ContractingR2DN(nn.Module):
         A = jnp.linalg.solve(E, H21)
         B1 = jnp.linalg.solve(E, ps.B1)
         
-        return ExplicitR2DNParams(
+        return ExplicitR2DDNParams(
             A, B1, ps.B2, ps.C1, ps.C2, ps.D12, ps.D21, ps.D22, ps.bx, ps.bv, ps.by,
             network_params = self.network._direct_to_explicit()
         )
-            
-    def _x_to_h_contracting(self, X: Array, p: Array, B1: Array, C1: Array) -> Array:
-        """Convert R2DN X matrix to part of H matrix used in the contraction
-        setup (using polar parameterization if required).
-
-        Args:
-            X (Array): REN X matrix.
-            p (Array): polar parameter.
-            B1 (Array): REN B1 matrix from implicit model.
-            C1 (Array): REN C1 matrix from explicit model.
-
-        Returns:
-            Array: REN H matrix.
-        """
-        nx = jnp.shape(B1)[0]
-        nX = jnp.shape(X)[0]
-        
-        H = X.T @ X
-        if self.do_polar_param:
-            H = p**2 * H / (l2_norm(X)**2)
-            
-        H = H + jnp.block([
-            [C1.T @ C1, jnp.zeros((nx, nx))],
-            [jnp.zeros((nx, nx)), B1 @ B1.T],
-        ]) + self.eps * jnp.identity(nX)
-        
-        return H 
     
         
     #################### Convenient Wrappers ####################
+    
+    
+    # TODO: Update all docs when we carry over both (xt, vt).
+    # TODO: Might need to change entire REN interface? Let's see...
 
     def explicit_call(
-        self, params:dict, x: Array, u: Array, e: ExplicitR2DNParams
+        self, params:dict, x: Array, u: Array, e: ExplicitR2DDNParams
     ) -> Tuple[Array, Array]:
-        """Evaluate explicit model for an R2DN.
+        """Evaluate explicit model for an R2DDN.
 
         Args:
             params (dict): Flax model parameters dictionary.
             x (Array): internal model state.
             u (Array): model inputs.
-            e (ExplicitR2DNParams): explicit params.
+            e (ExplicitR2DDNParams): explicit params.
 
         Returns:
             Tuple[Array, Array]: (next_states, outputs).
@@ -332,7 +339,7 @@ class ContractingR2DN(nn.Module):
         return self.apply(params, x, u, e, method="_explicit_call")
     
     def simulate_sequence(self, params: dict, x0, u) -> Tuple[Array, Array]:
-        """Simulate an R2DN over a sequence of inputs.
+        """Simulate an R2DDN over a sequence of inputs.
 
         Args:
             params (dict): Flax model parameters dictionary.
@@ -344,13 +351,13 @@ class ContractingR2DN(nn.Module):
         """
         return self.apply(params, x0, u, method="_simulate_sequence")
     
-    def direct_to_explicit(self, params: dict) -> ExplicitR2DNParams:
-        """Convert from direct to explicit R2DN params.
+    def direct_to_explicit(self, params: dict) -> ExplicitR2DDNParams:
+        """Convert from direct to explicit R2DDN params.
 
         Args:
             params (dict): Flax model parameters dictionary.
 
         Returns:
-            ExplicitR2DNParams: explicit params for R2DN.
+            ExplicitR2DDNParams: explicit params for R2DDN.
         """
         return self.apply(params, method="_direct_to_explicit")
