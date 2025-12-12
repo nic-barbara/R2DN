@@ -4,6 +4,7 @@ import optax
 from robustnn.utils import l2_norm
 from robustnn import ren_base as ren
 from robustnn import r2dn
+from robustnn import r2dn_delay as r2d2n
 
 
 def estimate_lipschitz_lower(    
@@ -107,7 +108,7 @@ def compute_p_contractingr2dn(model: r2dn.ContractingR2DN, ps: dict):
     C1 = ps["params"]["C1"]
     
     nx = model.state_size
-    H = model._x_to_h_contracting(X, p, B1, C1)
+    H = x_to_h_contracting(model, X, p, B1, C1)
     H11 = H[:nx, :nx]
     H22 = H[nx:, nx:]
     
@@ -115,3 +116,38 @@ def compute_p_contractingr2dn(model: r2dn.ContractingR2DN, ps: dict):
     P_imp = H22
     
     return E.T @ jnp.linalg.solve(P_imp, E)
+
+
+def compute_p_contractingr2d2n(model: r2d2n.ContractingR2D2N, ps: dict):
+    
+    p = ps["params"]["linear"]["p"]
+    X = ps["params"]["linear"]["X"]
+    Y = ps["params"]["linear"]["Y1"]
+    B1 = ps["params"]["linear"]["B"]
+    C1 = ps["params"]["linear"]["C"]
+    
+    nx = model.state_size
+    H = x_to_h_contracting(model, X, p, B1, C1)
+    H11 = H[:nx, :nx]
+    H22 = H[nx:, nx:]
+    
+    E = (H11 + H22 + Y - Y.T) / 2
+    P_imp = H22
+    
+    return E.T @ jnp.linalg.solve(P_imp, E)
+
+
+def x_to_h_contracting(model, X, p, B1, C1):
+        nx = jnp.shape(B1)[0]
+        nX = jnp.shape(X)[0]
+        
+        H = X.T @ X
+        if model.do_polar_param:
+            H = p**2 * H / (l2_norm(X)**2)
+            
+        H = H + jnp.block([
+            [C1.T @ C1, jnp.zeros((nx, nx))],
+            [jnp.zeros((nx, nx)), B1 @ B1.T],
+        ]) + model.eps * jnp.identity(nX)
+        
+        return H 

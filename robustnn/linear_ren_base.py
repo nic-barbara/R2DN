@@ -49,9 +49,22 @@ class ExplicitLinRENParams:
 
 class LinRENBase(RENBase):
     """
-    # TODO: Write docs here later
+    Base class for linear Recurrent Equilibrium Networks (RENs).
     
-    At the moment, nee to do linren = LinRENBase(nu, nx, 0, ny).
+    `See RENBase` for a description of all relevant parameters. `LinRENBase` is to be
+    used only for linear systems (when the number of neurons is zero in the REN) and
+    differes from the `RENBase` construction as follows:
+    
+    - The number of `features` must always be zero. Initialise linear RENs with, for
+      example, linren = ContractingLinREN(nu, nx, 0, ny).
+      
+    - There is no activation function. Setting it will do nothing.
+    
+    - `identity_output=true` is currently not supported (it's only supported for
+      contracting nonlinear RENs at the moment anyway).
+      
+    Linear RENs will be useful for users who want to construct stable linear systems
+    satisfying (Q, S, R)-dissipativity properties with a direct parametrisation.
     """
     
     def setup(self):
