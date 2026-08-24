@@ -22,14 +22,21 @@ All dependencies are managed via [uv](https://docs.astral.sh/uv/). To install uv
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+uv python install 3.12
+uv python pin 3.12
 ```
 
-To install the required dependencies and run the code, open a terminal in the root directory of this repository and enter the following commands.
+To install the required dependencies and check that the code will run, open a terminal in the root directory of this repository and enter the following commands.
 
     uv sync
-    ./run.sh
+    ./run_tests.sh
 
-This will create a Python virtual environment and run all the experiments, process the results, and reproduce the figures from the paper.
+To run all the experiments, process the results, and reproduce the figures from the paper:
+
+```
+run.sh
+```
 
 All code was tested and developed in Ubuntu 26.04 with CUDA 13.2 and Python 3.12.14.
 
