@@ -20,23 +20,20 @@ git clone https://github.com/nic-barbara/R2DN.git
 
 All dependencies are managed via [uv](https://docs.astral.sh/uv/). To install uv, run the following (Mac/Linux, see the [docs](https://docs.astral.sh/uv/getting-started/installation/) for Windows).
 
-```
-curl -LsSf https://astral.sh/uv/install.sh | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
-uv python install 3.12
-uv python pin 3.12
-```
+    uv python install 3.12
+    uv python pin 3.12
 
 To install the required dependencies and check that the code will run, open a terminal in the root directory of this repository and enter the following commands.
 
-    uv sync
+    uv sync --extra cuda13      # If CUDA 13 is installed
+    # uv sync                   # Otherwise
     ./run_tests.sh
 
 To run all the experiments, process the results, and reproduce the figures from the paper:
 
-```
-run.sh
-```
+    run.sh
 
 All code was tested and developed in Ubuntu 26.04 with CUDA 13.2 and Python 3.12.14.
 

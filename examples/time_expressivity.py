@@ -10,6 +10,7 @@ from robustnn.utils import count_num_params
 from utils import utils
 
 dirpath = Path(__file__).resolve().parent
+jax.config.update("jax_default_matmul_precision", "highest")
 
 # Nominal data sizes
 batches = 64
