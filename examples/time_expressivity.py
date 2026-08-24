@@ -24,7 +24,7 @@ def initialise_model(model, batches, horizon, seed=0):
     rng, key1, key2, key3 = jax.random.split(rng, 4)
     
     # Create dummy input data
-    states = model.initialize_carry(key1, (batches, model.state_size))
+    states = model.initialize_carry(key1, (batches, model.input_size))
     states = jax.random.normal(key1, states.shape)
     inputs = jax.random.normal(key2, (horizon, batches, model.input_size))
     
@@ -37,8 +37,8 @@ def time_forwards(model, params, states, inputs, n_repeats):
     # Define a simple forwards pass for timing
     @jax.jit
     def forward(params, x0, u):
-        x1, _ = model.simulate_sequence(params, x0, u)
-        return x1
+        x1, y = model.simulate_sequence(params, x0, u)
+        return x1, y
     
     # Time compilation
     start = timeit.default_timer()
@@ -64,7 +64,7 @@ def time_backwards(model, params, states, inputs, n_repeats):
     
     def grad_test(params, x0, u):
         grads = grad_func(params, x0, u)
-        jax.tree.map(lambda x: x.block_until_ready, grads)
+        jax.tree.map(lambda x: x.block_until_ready(), grads)
         return grads
     
     # Time compilation
@@ -128,7 +128,7 @@ def build_model(config):
         )
     return model
 
-def run_timing(filename, batches, horizon, n_repeats=1000):
+def run_timing(filename, batches, horizon, n_repeats=200):
     """Run the timing for a trained REN or R2DN."""
 
     config, params, results = utils.load_results(filename)
