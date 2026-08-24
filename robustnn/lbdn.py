@@ -17,7 +17,7 @@ from flax.linen import initializers as init
 from flax.struct import dataclass
 from flax.typing import Dtype, Array, PrecisionLike
 
-from robustnn.utils import l2_norm, cayley, dot_lax
+from robustnn.utils import l2_norm, cayley, cayley_b, dot_lax
 from robustnn.utils import ActivationFn, Initializer
 
 
@@ -40,45 +40,58 @@ class ExplicitSandwichParams:
 
 
 @dataclass
+class DirectLinearParams:
+    """Data class to keep track of direct params for a Lipschitz linear layer."""
+    XY: Array
+    a: Array
+    b: Array
+
+
+@dataclass
+class ExplicitLinearParams:
+    """Data class to keep track of explicit params for a Lipschitz linear layer."""
+    B: Array
+    b: Array
+
+
+# An LBDN is a stack of Sandwich layers followed by a Lipschitz linear layer,
+# so its parameter sequences hold a mix of the two.
+DirectLayerParams = DirectSandwichParams | DirectLinearParams
+ExplicitLayerParams = ExplicitSandwichParams | ExplicitLinearParams
+
+
+@dataclass
 class DirectLBDNParams:
     """Data class to keep track of direct params for LBDN."""
-    layers: Sequence[DirectSandwichParams]
+    layers: Sequence[DirectLayerParams]
     log_gamma: Array
 
 
 @dataclass
 class ExplicitLBDNParams:
     """Data class to keep track of explicit params for LBDN."""
-    layers: Sequence[ExplicitSandwichParams]
+    layers: Sequence[ExplicitLayerParams]
     log_gamma: Array
 
 
-class SandwichLayer(nn.Module):
-    """The 1-Lipschtiz Sandwich layer from Wang & Manchester (ICML '23).
-    
-    The layer interface has been written similarly to `linen.Dense`.    
+class SandwichLayerBase(nn.Module):
+    """Base class for Sandwich network layers.
 
-    Example usage::
+    This class has the parameters common to all Sandwich layers: the stacked
+    weight matrix `XY` that is passed through the Cayley transform, its norm
+    scaling `a`, and the bias `b`. Subclasses add any layer-specific
+    parameters and define the direct-to-explicit map and the layer call.
 
-        >>> from robustnn.networks.lbdn import SandwichLayer
-        >>> import jax, jax.numpy as jnp
-
-        >>> layer = SandwichLayer(input_size=3, features=4)
-        >>> params = layer.init(jax.random.key(0), jnp.ones((1, 3)))
-        >>> jax.tree_map(jnp.shape, params)
-        {'params': {'XY': (7, 4), 'a': (1,), 'b': (4,), 'd': (4,)}}
+    The layer interface has been written similarly to `linen.Dense`.
 
     Attributes:
         input_size: the number of input features.
         features: the number of output features.
         use_bias: whether to add a bias to the output (default: True).
-        is_output: treat this as the output layer of an LBDN (default: False).
-        activation: Activation function to use (default: relu).
-        
+
         kernel_init: initializer function for the weight matrix (default: lecun_normal()).
         bias_init: initializer function for the bias (default: zeros_init()).
-        psi_init: initializer function for the activation scaling (default: zeros_init()).
-        
+
         dtype: the dtype of the computation (default: infer from input and params).
         param_dtype: the dtype passed to parameter initializers (default: float32).
         precision: numerical precision of the computation see ``jax.lax.Precision``
@@ -87,30 +100,26 @@ class SandwichLayer(nn.Module):
     input_size: int
     features: int
     use_bias: bool = True
-    is_output: bool = False
-    activation: ActivationFn = nn.relu
-    
+
     kernel_init: Initializer = init.lecun_normal()
     bias_init: Initializer = init.zeros_init()
-    psi_init: Initializer = init.zeros_init()
-    
+
     dtype: Optional[Dtype] = None
     param_dtype: Dtype = jnp.float32
     precision: PrecisionLike = None
-    
+
     def setup(self):
-        """Initialise direct Sandwich params."""
+        """Initialise direct params"""
         dtype = self.param_dtype
-        
-        XY = self.param("XY", self.kernel_init, 
-                        (self.input_size + self.features, self.features), 
+
+        XY = self.param("XY", self.kernel_init,
+                        (self.input_size + self.features, self.features),
                         dtype)
-        a = self.param('a', init.constant(l2_norm(XY)), (1,), self.param_dtype)
-        d = self.param('d', self.psi_init, (self.features,), self.param_dtype)
-        b = self.param('b', self.bias_init, (self.features,), self.param_dtype)
-        
-        self.direct = DirectSandwichParams(XY, a, d, b)
-    
+        a = self.param("a", init.constant(l2_norm(XY)), (1,), dtype)
+        b = self.param("b", self.bias_init, (self.features,), dtype)
+
+        self.direct = self._build_direct(XY, a, b)
+
     def __call__(self, inputs: Array) -> Array:
         """Call a Sandwich layer.
 
@@ -122,7 +131,89 @@ class SandwichLayer(nn.Module):
         """
         explicit = self._direct_to_explicit()
         return self._explicit_call(inputs, explicit)
-        
+
+    def _scale_weights(self, ps: DirectLayerParams) -> Array:
+        """Scale `XY` by `a / ||XY||` ready for the Cayley transform.
+
+        Args:
+            ps (DirectLayerParams): direct layer params.
+
+        Returns:
+            Array: the scaled stacked weight matrix.
+        """
+        return ps.a / l2_norm(ps.XY) * ps.XY
+
+
+    ############### Specify these for each layer type ###############
+
+    def _build_direct(self, XY: Array, a: Array, b: Array) -> DirectLayerParams:
+        """Build the direct param struct, adding any layer-specific params.
+
+        This is called from within `setup()`, so subclasses may call
+        `self.param(...)` here to register extra parameters.
+        """
+        raise NotImplementedError(
+            "SandwichLayerBase layers should not be constructed directly. " +
+            "Choose a layer type instead (eg: `SandwichLayer`)."
+        )
+
+    def _direct_to_explicit(self) -> ExplicitLayerParams:
+        """Convert from direct layer params to explicit form for eval."""
+        raise NotImplementedError(
+            "SandwichLayerBase layers should not be called. " +
+            "Choose a layer type instead (eg: `SandwichLayer`)."
+        )
+
+    def _explicit_call(self, u: Array, e: ExplicitLayerParams) -> Array:
+        """Evaluate the explicit model for a layer."""
+        raise NotImplementedError(
+            "SandwichLayerBase layers should not be called. " +
+            "Choose a layer type instead (eg: `SandwichLayer`)."
+        )
+
+
+class SandwichLayer(SandwichLayerBase):
+    """The 1-Lipschtiz Sandwich layer from Wang & Manchester (ICML '23).
+
+    Example usage::
+
+        >>> from robustnn.lbdn import SandwichLayer
+        >>> import jax, jax.numpy as jnp
+
+        >>> layer = SandwichLayer(input_size=3, features=4)
+        >>> params = layer.init(jax.random.key(0), jnp.ones((1, 3)))
+        >>> jax.tree_util.tree_map(jnp.shape, params)
+        {'params': {'XY': (7, 4), 'a': (1,), 'b': (4,), 'd': (4,)}}
+
+    Attributes:
+        activation: Activation function to use (default: relu).
+        psi_init: initializer function for the activation scaling (default: zeros_init()).
+
+    See docs for `SandwichLayerBase` for the remaining arguments.
+
+    Note: Only monotone activations are supported: `identity`, `relu`, `tanh`, `sigmoid`.
+    """
+    activation: ActivationFn = nn.relu
+    psi_init: Initializer = init.zeros_init()
+
+    def _build_direct(self, XY: Array, a: Array, b: Array) -> DirectSandwichParams:
+        """Add the activation scaling `d` to the shared direct params."""
+        d = self.param("d", self.psi_init, (self.features,), self.param_dtype)
+        return DirectSandwichParams(XY, a, d, b)
+
+    def _direct_to_explicit(self) -> ExplicitSandwichParams:
+        """Convert from direct Sandwich params to explicit form for eval.
+
+        Returns:
+            ExplicitSandwichParams: explicit Sandwich params.
+        """
+        ps = self.direct
+        A_T, B_T = cayley(self._scale_weights(ps), return_split=True)
+
+        # Clip d to avoid over/underflow and return
+        psi_d = jnp.exp(jnp.clip(ps.d, min=-20.0, max=20.0))
+        return ExplicitSandwichParams(A_T, B_T.T, psi_d, ps.b)
+
     def _explicit_call(self, u: Array, e: ExplicitSandwichParams) -> Array:
         """Evaluate the explicit model for a Sandwich layer.
 
@@ -133,30 +224,62 @@ class SandwichLayer(nn.Module):
         Returns:
             Array: layer outputs.
         """
-        if self.is_output:
-            x = dot_lax(u, e.B)
-            return x + e.b if self.use_bias else x
-        
         sqrt2 = self.param_dtype(jnp.sqrt(2.0))
         x = sqrt2 * dot_lax(u, ((jnp.diag(1 / e.psi_d)) @ e.B))
-        if self.use_bias: 
+        if self.use_bias:
             x += e.b
         return sqrt2 * dot_lax(self.activation(x), (e.A_T * e.psi_d.T))
-    
-    def _direct_to_explicit(self) -> ExplicitSandwichParams:
-        """Convert from direct Sandwich params to explicit form for eval.
 
-        Args:
-            ps (DirectSandwichParams): direct Sandwich params.
+
+class SandwichLinear(SandwichLayerBase):
+    """A linear layer whose weight matrix satisfies `||B|| <= 1`.
+
+    This is the output layer of an LBDN from Wang & Manchester (ICML '23).
+    It shares the Cayley-parameterised weight of a `SandwichLayer`, but has
+    no activation and hence no activation scaling `d`.
+
+    Example usage::
+
+        >>> from robustnn.lbdn import SandwichLinear
+        >>> import jax, jax.numpy as jnp
+
+        >>> layer = SandwichLinear(input_size=3, features=4)
+        >>> params = layer.init(jax.random.key(0), jnp.ones((1, 3)))
+        >>> jax.tree_util.tree_map(jnp.shape, params)
+        {'params': {'XY': (7, 4), 'a': (1,), 'b': (4,)}}
+
+    See docs for `SandwichLayerBase` for the full list of arguments.
+    """
+
+    def _build_direct(self, XY: Array, a: Array, b: Array) -> DirectLinearParams:
+        """The shared direct params are all this layer needs."""
+        return DirectLinearParams(XY, a, b)
+
+    def _direct_to_explicit(self) -> ExplicitLinearParams:
+        """Convert from direct params to explicit form for eval.
+
+        Only the `B` block of the Cayley transform is needed here, so we skip
+        the linear solve for `A`.
 
         Returns:
-            ExplicitSandwichParams: explicit Sandwich params.
+            ExplicitLinearParams: explicit params.
         """
-        # Clip d to avoid over/underflow and return
         ps = self.direct
-        A_T, B_T = cayley(ps.a / l2_norm(ps.XY) * ps.XY, return_split=True)
-        psi_d = jnp.exp(jnp.clip(ps.d, a_min=-20.0, a_max=20.0))
-        return ExplicitSandwichParams(A_T, B_T.T, psi_d, ps.b)
+        B_T = cayley_b(self._scale_weights(ps))
+        return ExplicitLinearParams(B_T.T, ps.b)
+
+    def _explicit_call(self, u: Array, e: ExplicitLinearParams) -> Array:
+        """Evaluate the explicit model for a Lipschitz linear layer.
+
+        Args:
+            u (Array): layer inputs.
+            e (ExplicitLinearParams): explicit params.
+
+        Returns:
+            Array: layer outputs.
+        """
+        x = dot_lax(u, e.B)
+        return x + e.b if self.use_bias else x
 
 
 class LBDN(nn.Module):
@@ -173,10 +296,10 @@ class LBDN(nn.Module):
         
         >>> model = LBDN(nu, layers, ny, gamma=gamma)
         >>> params = model.init(jax.random.key(0), jnp.ones((6,nu)))
-        >>> jax.tree_map(jnp.shape, params)
-        {'params': {'SandwichLayer_0': {'XY': (13, 8), 'a': (1,), 'b': (8,), 'd': (8,)}, 
-        'SandwichLayer_1': {'XY': (24, 16), 'a': (1,), 'b': (16,), 'd': (16,)}, 
-        'SandwichLayer_2': {'XY': (18, 2), 'a': (1,), 'b': (2,)}, 'ln_gamma': (1,)}}
+        >>> jax.tree_util.tree_map(jnp.shape, params)
+        {'params': {'layers_0': {'XY': (13, 8), 'a': (1,), 'b': (8,), 'd': (8,)}, 'layers_1': {'XY': (24, 16), 'a': (1,), 'b': (16,), 'd': (16,)}, 'layers_2': {'XY': (18, 2), 'a': (1,), 'b': (2,)}}}
+        
+        Note: the ``ln_gamma`` parameter only appears when ``trainable_lipschitz=True``.
     
     Attributes:
         input_size: the number of input features.
@@ -228,31 +351,39 @@ class LBDN(nn.Module):
         if self.trainable_lipschitz:
             log_gamma = self.param("ln_gamma", init.constant(log_gamma),(1,), dtype)
         
-        # Build a list of Sandwich layers, but treat the output seperately
-        layers = []
-        is_output = False
-        kernel_init = self.kernel_init
-        in_layers = (self.input_size,) + self.hidden_sizes
-        out_layers = self.hidden_sizes + (self.output_size,)
+        # Build a list of Sandwich layers, but treat the output separately
+        hidden_sizes = tuple(self.hidden_sizes)
+        in_layers = (self.input_size,) + hidden_sizes
+        out_layers = hidden_sizes + (self.output_size,)
         
-        for k in range(len(in_layers)):
-            
-            if k == len(in_layers): # Output layer
-                is_output = True
-                if self.init_output_zero:
-                    kernel_init = init.zeros_init()
-            
-            layers.append(
-                SandwichLayer(
-                    input_size=in_layers[k],
-                    features=out_layers[k], 
-                    activation=self.activation,
-                    use_bias=self.use_bias,
-                    kernel_init=kernel_init,
-                    is_output=is_output,
-                    param_dtype=dtype
-                )
+        layers = [
+            SandwichLayer(
+                input_size=in_layers[k],
+                features=out_layers[k],
+                activation=self.activation,
+                use_bias=self.use_bias,
+                kernel_init=self.kernel_init,
+                bias_init=self.bias_init,
+                psi_init=self.psi_init,
+                param_dtype=dtype
             )
+            for k in range(len(hidden_sizes))
+        ]
+        
+        out_kernel_init = self.kernel_init
+        if self.init_output_zero:
+            out_kernel_init = init.zeros_init()
+        
+        layers.append(
+            SandwichLinear(
+                input_size=in_layers[-1],
+                features=out_layers[-1],
+                use_bias=self.use_bias,
+                kernel_init=out_kernel_init,
+                bias_init=self.bias_init,
+                param_dtype=dtype
+            )
+        )
         
         self.layers = layers
         self.direct = DirectLBDNParams([s.direct for s in layers], log_gamma)
