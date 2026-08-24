@@ -1,0 +1,22 @@
+[project]
+name = "robustnn"
+version = "0.1.0"
+requires-python = "==3.12.14"
+dependencies = [
+    "cycler>=0.12.1",
+    "flax>=0.12.9",
+    "jax[cuda13]>=0.11.1",
+    "matplotlib>=3.11.1",
+    "numpy>=2.5.2",
+    "optax>=0.2.8",
+    "pandas>=3.0.5",
+    "scipy>=1.18.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "robustnn"
+module-root = ""
