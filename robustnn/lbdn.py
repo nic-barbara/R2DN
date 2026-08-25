@@ -32,10 +32,13 @@ class DirectSandwichParams:
 
 @dataclass
 class ExplicitSandwichParams:
-    """Data class to keep track of explicit params for Sandwich layer."""
+    """Data class to keep track of explicit params for Sandwich layer.
+    
+    Note that psi_d from the original paper is multiplied against A_T and B
+    in the code (see _explicit_call) so it does not need to be stored.
+    """
     A_T: Array
     B: Array
-    psi_d: Array
     b: Array
 
 
@@ -204,15 +207,22 @@ class SandwichLayer(SandwichLayerBase):
     def _direct_to_explicit(self) -> ExplicitSandwichParams:
         """Convert from direct Sandwich params to explicit form for eval.
 
+        The activation scaling `psi` is folded into `A_T` and `B` here rather
+        than applied on every call because it's loop-invariant.
+        
+        TODO: Doing this can lead to floating-point error accumulation in the grads.
+        TODO: Revert it back to the original version if this becomes a problem.
+
         Returns:
             ExplicitSandwichParams: explicit Sandwich params.
         """
         ps = self.direct
         A_T, B_T = cayley(self._scale_weights(ps), return_split=True)
 
-        # Clip d to avoid over/underflow and return
+        # Clip d to avoid over/underflow. `diag(psi) @ B` scales the rows of B
+        # and `A_T @ diag(psi)` the columns of A_T, so both are broadcasts.
         psi_d = jnp.exp(jnp.clip(ps.d, min=-20.0, max=20.0))
-        return ExplicitSandwichParams(A_T, B_T.T, psi_d, ps.b)
+        return ExplicitSandwichParams(A_T * psi_d, B_T.T / psi_d[:, None], ps.b)
 
     def _explicit_call(self, u: Array, e: ExplicitSandwichParams) -> Array:
         """Evaluate the explicit model for a Sandwich layer.
@@ -225,10 +235,10 @@ class SandwichLayer(SandwichLayerBase):
             Array: layer outputs.
         """
         sqrt2 = self.param_dtype(jnp.sqrt(2.0))
-        x = sqrt2 * dot_lax(u, ((jnp.diag(1 / e.psi_d)) @ e.B))
+        x = sqrt2 * dot_lax(u, e.B)
         if self.use_bias:
             x += e.b
-        return sqrt2 * dot_lax(self.activation(x), (e.A_T * e.psi_d.T))
+        return sqrt2 * dot_lax(self.activation(x), e.A_T)
 
 
 class SandwichLinear(SandwichLayerBase):
