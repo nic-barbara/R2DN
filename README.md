@@ -31,6 +31,11 @@ To install the required dependencies and check that the code will run, open a te
     # uv sync                   # Otherwise
     ./run_tests.sh
 
+All plots use LaTeX font as the default. This requires a local install of LaTeX. Note that the default distribution of LaTeX on Ubuntu is not enough. Install the extra packages with the following:
+
+    sudo apt update && sudo apt upgrade
+    sudo apt install texlive-full
+
 To run all the experiments, process the results, and reproduce the figures from the paper:
 
     run.sh
