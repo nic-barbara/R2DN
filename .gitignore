@@ -1,6 +1,7 @@
 # Don't include big files or environment
 data/
 results/
+notes/
 .venv/
 
 # Byte-compiled / optimized / DLL files
