@@ -70,7 +70,7 @@ def time_backwards(model, params, states, inputs, n_repeats):
     return compile_time, eval_time / n_repeats
 
 
-def time_model(model, batches, horizon, n_repeats):
+def time_model(model, batches, horizon, n_repeats, verbose=True):
     """Time forwards and backwards passes, print and store results."""
     
     # Initialise the model params and count them
@@ -79,13 +79,15 @@ def time_model(model, batches, horizon, n_repeats):
     
     # Time the forwards pass
     cf_time, rf_time = time_forwards(model, params, states, inputs, n_repeats)
-    print(f"Forwards compile time: {cf_time:.6f} seconds")
-    print(f"Forwards eval time   : {rf_time:.6f} seconds")
+    if verbose:
+        print(f"Forwards compile time: {cf_time:.6f} seconds")
+        print(f"Forwards eval time   : {rf_time:.6f} seconds")
     
     # Time the backwards pass
     cb_time, rb_time = time_backwards(model, params, states, inputs, n_repeats)
-    print(f"Backwards compile time: {cb_time:.6f} seconds")
-    print(f"Backwards eval time   : {rb_time:.6f} seconds")
+    if verbose:
+        print(f"Backwards compile time: {cb_time:.6f} seconds")
+        print(f"Backwards eval time   : {rb_time:.6f} seconds")
 
     return {
         "nv": model.features,

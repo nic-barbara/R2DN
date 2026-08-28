@@ -175,13 +175,15 @@ def plot_results():
     
     # Specific formatting for each plot
     if way == "forwards":
-        xy1_label = (0.12, 3.5e-2)
+        xy1_label = (0.2, 4e-2)
         xy2_label = (0.9, 1.15e-2)
         ylabel = "Inference time (s)"
+        r2dn_label = f"slope = {p2[0]:.2f} ({s2:.2f})"
     elif way == "backwards":
-        xy1_label = (0.12, 9e-2)
-        xy2_label = (0.9, 3e-2)
+        xy1_label = (0.2, 1.1e-1)
+        xy2_label = (0.7, 3.1e-2)
         ylabel = "Backpropagagion time (s)"
+        r2dn_label = f"slope = {p2[0]:.3f} ({s2:.3f})"
         
     # Annotate slopes
     plt.annotate(
@@ -191,7 +193,7 @@ def plot_results():
         fontsize=12,
     )
     plt.annotate(
-        f"slope = {p2[0]:.3f} ({s2:.3f})",
+        r2dn_label,
         xy=xy2_label,
         xycoords='data',
         fontsize=12,
