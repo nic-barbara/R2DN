@@ -24,7 +24,7 @@ class ContractingREN(ren.RENBase):
         >>> jax.tree_util.tree_map(jnp.shape, params)
         {'params': {'B2': (2, 1), 'C2': (1, 2), 'D12': (4, 1), 'D21': (1, 4), 'D22': (1, 
         1), 'X': (8, 8), 'X3': (1, 1), 'Y1': (2, 2), 'Y3': (1, 1), 'Z3': (0, 1), 'bv': 
-        (4,), 'bx': (2,), 'by': (1,), 'polar': (1,)}}
+        (4,), 'bx': (2,), 'by': (1,), 'p': (1,)}}
     
     See docs for `RENBase` for full list of arguments.
     """
@@ -60,8 +60,8 @@ class LipschitzREN(ren.RENBase):
         >>> params = model.init(key2, states, inputs)
         >>> jax.tree_util.tree_map(jnp.shape, params)
         {'params': {'B2': (2, 1), 'C2': (1, 2), 'D12': (4, 1), 'D21': (1, 4), 'D22': (1, 
-        1), 'X': (8, 8), 'X3': (1, 1), 'Y1': (2, 2), 'Y3': (1, 1), 'Z3': (0, 1), 'bv': (1, 
-        4), 'bx': (1, 2), 'by': (1, 1), 'polar': (1,)}}
+        1), 'X': (8, 8), 'X3': (1, 1), 'Y1': (2, 2), 'Y3': (1, 1), 'Z3': (0, 1), 'bv': 
+        (4,), 'bx': (2,), 'by': (1,), 'p': (1,)}}
     
     See docs for `RENBase` for full list of arguments.
     """
@@ -144,8 +144,8 @@ class GeneralREN(ren.RENBase):
         >>> params = model.init(key2, states, inputs)
         >>> jax.tree_util.tree_map(jnp.shape, params)
         {'params': {'B2': (2, 1), 'C2': (1, 2), 'D12': (4, 1), 'D21': (1, 4), 'D22': (1, 
-        1), 'X': (8, 8), 'X3': (1, 1), 'Y1': (2, 2), 'Y3': (1, 1), 'Z3': (0, 1), 'bv': (1, 
-        4), 'bx': (1, 2), 'by': (1, 1), 'polar': (1,)}}
+        1), 'X': (8, 8), 'X3': (1, 1), 'Y1': (2, 2), 'Y3': (1, 1), 'Z3': (0, 1), 'bv': 
+        (4,), 'bx': (2,), 'by': (1,), 'p': (1,)}}
         
     Attributes:
         Q: IQC output weight.

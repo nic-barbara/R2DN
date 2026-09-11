@@ -216,9 +216,9 @@ for s in range(5):
     r2dn_config = deepcopy(config)
     r2dn_config["network"] = "contracting_r2dn"
     r2dn_config["activation"] = "relu"
-    layers = 6      
+    layers = 10
     nv_r2dn = 16
-    for nh in [8, 16, 24, 32, 48, 64, 80, 96]:
+    for nh in [4, 8, 16, 24, 32, 48, 64, 80, 96]:
         r2dn_config["layers"] = layers
         r2dn_config["nv"] = nv_r2dn
         r2dn_config["nh"] = (nh,) * layers
@@ -228,7 +228,7 @@ for s in range(5):
     # Run for a bunch of RENs
     ren_config = deepcopy(config)
     ren_config["activation"] = "tanh"
-    for nv in [20, 30, 40, 60, 80, 100, 128, 200]:
+    for nv in [20, 30, 40, 60, 80, 100, 128, 200, 300, 400, 512]:
         ren_config["nv"] = nv
         print(f"REN {nv=} {s=}")
         train_and_test(ren_config)

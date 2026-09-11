@@ -49,6 +49,9 @@ def generate_fname(config):
         config["seed"]
     )
     
+    if config.get("tag"):
+        filename += f"_{config['tag']}"
+    
     filepath = dirpath / f"../../results/{config['experiment']}/"
     if not filepath.exists():
         filepath.mkdir(parents=True)
