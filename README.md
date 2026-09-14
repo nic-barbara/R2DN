@@ -8,7 +8,7 @@ Included are JAX implementations of each of the following robust neural models:
 - Contracting, Lipschitz, and (Q,S,R)-dissipative Recurrent Equilibrium Networks (RENs) from [Revay, Wang, & Manchester (TAC 2023)](https://ieeexplore.ieee.org/document/10179161).
 - Contracting Robust Recurrent Deep Networks (R2DNs) from our current work.
 
-Robust neural models are included in the `robustnn/` directory. Scripts used to generate the results in the paper are in the `examples/` directory. For the latest implementations of the above robust NNs, and many others, see [https://github.com/acfr/RobustNeuralNetworks](https://github.com/acfr/RobustNeuralNetworks).
+Robust neural models are included in the `robustnn/` directory. Scripts used to generate the results in the paper are in the `examples/` directory. For the latest implementations of robust NNs, see [https://github.com/acfr/RobustNeuralNetworks](https://github.com/acfr/RobustNeuralNetworks).
 
 ## Installation and Usage
 
