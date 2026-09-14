@@ -100,7 +100,7 @@ def format_plot(xlabel, ylabel, filename_suffix, x1, x2, yscale):
     plt.close()
     
 
-def plot_results(experiment, ylabel, yscale="log"):
+def plot_results(experiment, yscale="log"):
     
     # Get data aggregated for each model, and make sure
     # they're all using the same init_method (i.e., don't load other files)
@@ -130,7 +130,7 @@ def plot_results(experiment, ylabel, yscale="log"):
     plt.fill_between(x, y1min, y1max, alpha=0.2, color=color_r)
     plt.fill_between(x, y2min, y2max, alpha=0.2, color=color_s)
     
-    format_plot("Training epochs", ylabel, f"{experiment}_loss", x, x, yscale)
+    format_plot("Training epochs", "Loss", f"{experiment}_loss", x, x, yscale)
     
     # Now do loss vs. time plots
     y1 = model_results["contracting_ren"]["time_losses"]
@@ -151,16 +151,20 @@ def plot_results(experiment, ylabel, yscale="log"):
     # Plot a marker at the end to signify training is done
     plt.scatter(x1[-1:], y1[-1:], c=color_r, s=20, marker="o")
     plt.scatter(x2[-1:], y2[-1:], c=color_s, s=20, marker="o")
+
+    # Final mean loss, so it is easy to see which model ends up ahead
+    plt.axhline(y1[-1], color=color_r, ls="--", lw=1.0, alpha=0.75)
+    plt.axhline(y2[-1], color=color_s, ls="--", lw=1.0, alpha=0.75)
     
     # ax = plt.gca()
     # ax.figure.set_size_inches(3.5, 2.5)
 
-    format_plot("Elapsed training time (s)", ylabel, f"{experiment}_timeloss", x1, x2, yscale)
+    format_plot("Elapsed training time (s)", "Loss", f"{experiment}_timeloss", x1, x2, yscale)
 
 
-plot_results("f16", "Training loss")
-plot_results("pde", "Training loss")
-plot_results("youla", "Test loss", "linear")
+plot_results("f16")
+plot_results("pde")
+plot_results("youla", "linear")
 
 
 # ---------------------------------------------------------------
