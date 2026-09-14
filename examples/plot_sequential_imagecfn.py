@@ -102,7 +102,7 @@ def plot_accuracy(experiment):
                          alpha=0.2, color=COLORS[model])
         plt.scatter(r["time"][-1:], r["time_acc"][-1:], c=COLORS[model], s=20, marker="o")
         # Final mean accuracy, so it is easy to see which model ends up ahead
-        plt.axhline(r["acc"][-1], color=COLORS[model], ls="--", lw=0.8, alpha=0.4)
+        plt.axhline(r["acc"][-1], color=COLORS[model], ls="--", lw=1.0, alpha=0.75)
     format_plot("Elapsed training time (h)", "Test accuracy (\\%)",
                 f"{experiment}_accuracy_time")
 

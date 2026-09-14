@@ -153,8 +153,8 @@ def plot_results(experiment, yscale="log"):
     plt.scatter(x2[-1:], y2[-1:], c=color_s, s=20, marker="o")
 
     # Final mean loss, so it is easy to see which model ends up ahead
-    plt.axhline(y1[-1], color=color_r, ls="--", lw=0.8, alpha=0.4)
-    plt.axhline(y2[-1], color=color_s, ls="--", lw=0.8, alpha=0.4)
+    plt.axhline(y1[-1], color=color_r, ls="--", lw=1.0, alpha=0.75)
+    plt.axhline(y2[-1], color=color_s, ls="--", lw=1.0, alpha=0.75)
     
     # ax = plt.gca()
     # ax.figure.set_size_inches(3.5, 2.5)
