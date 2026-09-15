@@ -1,8 +1,13 @@
+import gzip
 import os
+import pickle
+import struct
+import tarfile
+import zipfile
 import jax.numpy as jnp
+import numpy as np
 import pandas as pd
 from urllib.request import urlretrieve
-import zipfile
 
 def download_and_extract_f16():
     
@@ -70,3 +75,84 @@ def load_f16():
     y_val = jnp.swapaxes(jnp.array([datasets[i][1] for i in [1, 3, 5]]), 1, 0)
     
     return (u_train, y_train), (u_val, y_val)
+
+
+def _download_file(url, path):
+    """Download a file if it isn't already there."""
+    if os.path.exists(path):
+        return
+    print(f"Downloading {url}...")
+    urlretrieve(url, path)
+    print("Done!")
+
+
+def download_mnist():
+    """Download the raw MNIST idx files."""
+    url = "https://ossci-datasets.s3.amazonaws.com/mnist/"
+    files = [
+        "train-images-idx3-ubyte.gz",
+        "train-labels-idx1-ubyte.gz",
+        "t10k-images-idx3-ubyte.gz",
+        "t10k-labels-idx1-ubyte.gz",
+    ]
+    data_dir = "./data/mnist/"
+    os.makedirs(data_dir, exist_ok=True)
+    for f in files:
+        _download_file(url + f, os.path.join(data_dir, f))
+    return data_dir
+
+
+def _read_idx(filepath):
+    """Read an IDX file (the MNIST format) into a numpy array."""
+    with gzip.open(filepath, "rb") as f:
+        magic, ndim = struct.unpack(">HBB", f.read(4))[1:]
+        shape = struct.unpack(">" + "I"*ndim, f.read(4*ndim))
+        return np.frombuffer(f.read(), dtype=np.uint8).reshape(shape)
+
+
+def load_mnist():
+    """Load MNIST as (images, labels) with images in [0,1], shape (N, 28, 28)."""
+    folder = download_mnist()
+    def load(images, labels):
+        x = _read_idx(os.path.join(folder, images)).astype(np.float32) / 255.0
+        y = _read_idx(os.path.join(folder, labels)).astype(np.int32)
+        return x, y
+    train = load("train-images-idx3-ubyte.gz", "train-labels-idx1-ubyte.gz")
+    test = load("t10k-images-idx3-ubyte.gz", "t10k-labels-idx1-ubyte.gz")
+    return train, test
+
+
+def download_and_extract_cifar10():
+    """Download and extract the CIFAR-10 python batches."""
+    url = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+    data_dir = "./data/cifar10/"
+    tar_path = os.path.join(data_dir, "cifar-10-python.tar.gz")
+    extracted_folder = os.path.join(data_dir, "cifar-10-batches-py")
+    os.makedirs(data_dir, exist_ok=True)
+
+    if os.path.exists(extracted_folder):
+        return extracted_folder
+
+    _download_file(url, tar_path)
+    print("Extracting files...")
+    with tarfile.open(tar_path, "r:gz") as tar:
+        tar.extractall(data_dir)
+    print("Done!")
+    return extracted_folder
+
+
+def load_cifar10():
+    """Load CIFAR-10 as (images, labels) with images in [0,1], shape (N, 32, 32, 3)."""
+    folder = download_and_extract_cifar10()
+    def load(files):
+        x, y = [], []
+        for f in files:
+            with open(os.path.join(folder, f), "rb") as fin:
+                batch = pickle.load(fin, encoding="bytes")
+            x.append(batch[b"data"].reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1))
+            y.append(np.array(batch[b"labels"]))
+        x = np.concatenate(x).astype(np.float32) / 255.0
+        return x, np.concatenate(y).astype(np.int32)
+    train = load([f"data_batch_{i}" for i in range(1, 6)])
+    test = load(["test_batch"])
+    return train, test
