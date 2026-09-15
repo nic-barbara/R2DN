@@ -42,6 +42,30 @@ def time_forwards(model, params, states, inputs, n_repeats):
     return compile_time, eval_time / n_repeats
 
 
+def time_explicit_forwards(model, params, explicit, states, inputs, n_repeats):
+    """Time the forwards pass of a model with pre-computed explicit params.
+
+    Same as `time_forwards`, but skips the direct-to-explicit parameter map, as
+    in deployment where the explicit model is constructed once at
+    initialisation rather than on every call.
+    """
+    @jax.jit
+    def forward(params, x0, u):
+        return model.simulate_explicit_sequence(params, x0, u, explicit)
+
+    # Time compilation
+    start = timeit.default_timer()
+    jax.block_until_ready(forward(params, states, inputs))
+    compile_time = timeit.default_timer() - start
+
+    # Time evaluation
+    eval_time = timeit.timeit(
+        lambda: jax.block_until_ready(forward(params, states, inputs)),
+        number=n_repeats
+    )
+    return compile_time, eval_time / n_repeats
+
+
 def time_backwards(model, params, states, inputs, n_repeats):
     """Time the backwards pass of a model (computing grads)."""
     # Dummy loss function to backpropagate through

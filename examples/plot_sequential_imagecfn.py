@@ -88,14 +88,14 @@ def plot_accuracy(experiment):
     runs = load_runs(experiment)
     results = {m: aggregate(runs[m]) for m in MODELS if runs[m]}
 
-    plt.figure(figsize=(4, 2.7))
+    plt.figure(figsize=(3, 2.7))
     for model, r in results.items():
         x = np.arange(1, len(r["acc"]) + 1)
         plt.plot(x, r["acc"], color=COLORS[model], label=LABELS[model])
         plt.fill_between(x, r["acc_min"], r["acc_max"], alpha=0.2, color=COLORS[model])
     format_plot("Training epochs", "Test accuracy (\\%)", f"{experiment}_accuracy")
 
-    plt.figure(figsize=(4, 2.7))
+    plt.figure(figsize=(3, 2.7))
     for model, r in results.items():        
         plt.plot(r["time"], r["time_acc"], color=COLORS[model], label=LABELS[model])
         plt.fill_between(r["time"], r["time_acc_min"], r["time_acc_max"],
