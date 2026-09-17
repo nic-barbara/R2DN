@@ -15,14 +15,43 @@ from robustnn.utils import ActivationFn, Initializer
 
 def get_valid_init():
     return ["random", "long_memory"]
-    
+        
 
-@partial(jax.jit, static_argnums=(0,))
-def tril_equlibrium_layer(activation, D11, b):
+def _back_substitute(D11, j, g):
+    """Solve `vbar = J @ (g + D11.T @ vbar)` for strictly lower-triangular
+    `D11`, where `J = diag(j)` and `j = activation'(v)` at the solution.
+
+    Back substitution, as a reverse `lax.scan` to keep the compiled loop body
+    to one block rather than one per row of `D11`.
     """
-    Solve `w = activation(D11 @ w + b)` for lower-triangular D11.
-    
+    def step(u, args):
+        i, D11_col, g_i, j_i = args
+        # `u` is zero for `m <= i` and `D11[m, i] = 0` there too, so this
+        # full-width dot picks out exactly the `m > i` terms.
+        vbar_i = j_i * (g_i + u @ D11_col)
+        return u.at[..., i].set(vbar_i), vbar_i
+
+    # `lax.scan` only slices along axis 0, so the neuron axis goes first:
+    # rows of `D11.T` are the columns of `D11`, and `g`, `j` are moved to match.
+    idx = jnp.arange(D11.shape[0])
+    _, vbar = jax.lax.scan(
+        step,
+        jnp.zeros_like(g),
+        (idx, D11.T, jnp.moveaxis(g, -1, 0), jnp.moveaxis(j, -1, 0)),
+        reverse=True,
+    )
+    return jnp.moveaxis(vbar, 0, -1)
+
+
+@partial(jax.custom_vjp, nondiff_argnums=(0,))
+def _tril_equilibrium_layer(activation, D11, b):
+    """Solve `w = activation(D11 @ w + b)` for lower-triangular D11.
+        
     Activation must be monotone with slope restricted to `[0,1]`.
+    
+    Gradients come from implicit function theorem. Computes the same thing
+    as differentiating through the solver for strictly lower-triangular D11,
+    but this compiles/runs faster.
     """
     w_eq = jnp.zeros_like(b)
     D11_T = D11.T
@@ -33,7 +62,37 @@ def tril_equlibrium_layer(activation, D11, b):
         Di_wi = wi @ Di_T
         w_eq = w_eq.at[..., i].set(activation(Di_wi + bi))
     return w_eq
-        
+
+
+def _tril_equilibrium_layer_fwd(activation, D11, b):
+    """Solve the layer, save intermediates for the backwards pass."""
+    w_eq = _tril_equilibrium_layer(activation, D11, b)
+
+    # Re-evaluate the pre-activation at the solution (exact, since w_eq 
+    # is the fixed point) to get the slope of the activation there
+    v = w_eq @ D11.T + b
+    _, j = jax.jvp(activation, (v,), (jnp.ones_like(v),))
+    return w_eq, (w_eq, j, D11)
+
+
+def _tril_equilibrium_layer_bwd(activation, res, g):
+    """Backwards pass from the implicit function theorem."""
+    w_eq, j, D11 = res
+    vbar = _back_substitute(D11, j, g)
+
+    # From `v = w_eq @ D11.T + b`: `dD11 = vbar.T @ w_eq` summed over all batch
+    # dims, and `db = vbar`. Only the strict lower triangle of D11 is ever read,
+    # so mask the rest (an upstream `jnp.tril` would do this anyway).
+    lead = tuple(range(vbar.ndim - 1))
+    dD11 = jnp.tril(jnp.tensordot(vbar, w_eq, axes=(lead, lead)), k=-1)
+    return dD11, vbar
+
+
+_tril_equilibrium_layer.defvjp(_tril_equilibrium_layer_fwd,
+                              _tril_equilibrium_layer_bwd)
+
+tril_equilibrium_layer = jax.jit(_tril_equilibrium_layer, static_argnums=(0,))
+
 
 @dataclass
 class DirectRENParams:
@@ -276,11 +335,29 @@ class RENBase(nn.Module):
             Tuple[Array, Array]: (next_states, outputs).
         """
         b = x @ e.C1.T + u @ e.D12.T + e.bv
-        w = tril_equlibrium_layer(self.activation, e.D11, b)
+        w = tril_equilibrium_layer(self.activation, e.D11, b)
         x1 = x @ e.A.T + w @ e.B1.T + u @ e.B2.T + e.bx
         y = x @ e.C2.T + w @ e.D21.T + u @ e.D22.T + e.by
         return x1, y
     
+    def _simulate_explicit_sequence(self, x0, u, e: ExplicitRENParams) -> Tuple[Array, Array]:
+        """Simulate a REN over a sequence of inputs given explicit params.
+
+        Args:
+            x0: array of initial states, shape is (batches, ...).
+            u: array of inputs as a sequence, shape is (time, batches, ...).
+            e (ExplicitRENParams): explicit params.
+
+        Returns:
+            Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
+        """
+        def rollout(carry, ut):
+            xt, = carry
+            xt1, yt = self._explicit_call(xt, ut, e)
+            return (xt1,), yt
+        (x1, ), y = jax.lax.scan(rollout, (x0,), u)
+        return x1, y
+
     def _simulate_sequence(self, x0, u) -> Tuple[Array, Array]:
         """Simulate a REN over a sequence of inputs.
 
@@ -293,12 +370,7 @@ class RENBase(nn.Module):
             Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
         """
         explicit = self._direct_to_explicit()
-        def rollout(carry, ut):
-            xt, = carry
-            xt1, yt = self._explicit_call(xt, ut, explicit)
-            return (xt1,), yt
-        (x1, ), y = jax.lax.scan(rollout, (x0,), u)
-        return x1, y
+        return self._simulate_explicit_sequence(x0, u, explicit)
     
     @nn.nowrap
     def initialize_carry(
@@ -454,6 +526,20 @@ class RENBase(nn.Module):
         """
         return self.apply(params, method="_direct_to_explicit")
     
+    def simulate_explicit_sequence(self, params: dict, x0, u, e: ExplicitRENParams):
+        """Simulate a REN over a sequence of inputs given explicit params.
+        
+        Args:
+            params (dict): Flax model parameters dictionary.
+            x0: array of initial states, shape is (batches, ...).
+            u: array of inputs as a sequence, shape is (time, batches, ...).
+            e (ExplicitR2DNParams): explicit params.
+            
+        Returns:
+            Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
+        """
+        return self.apply(params, x0, u, e, method="_simulate_explicit_sequence")
+
     def simulate_sequence(self, params: dict, x0, u) -> Tuple[Array, Array]:
         """Simulate a REN over a sequence of inputs.
 

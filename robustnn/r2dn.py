@@ -116,12 +116,7 @@ class ContractingR2DN(nn.Module):
         
         >>> params = model.init(key2, states, inputs)
         >>> jax.tree_util.tree_map(jnp.shape, params)
-        {'params': {'B2': (2, 1), 'C2': (1, 2), 'D12': (4, 1), 'D21': (1, 4), 'D22': (1, 
-        1), 'Xbar': (2, 12), 'Y1': (2, 2), 'Y2': (4, 4), 'Y3': (6, 4), 'bv': (4,), 'bx': 
-        (2,), 'by': (1,), 'network': {'layers_0': {'XY': (6, 2), 'a': (1,), 'b': (2,), 'd': 
-        (2,)}, 'layers_1': {'XY': (6, 4), 'a': (1,), 'b': (4,), 'd': (4,)}, 'layers_2': 
-        {'XY': (8, 4), 'a': (1,), 'b': (4,), 'd': (4,)}, 'ln_gamma': (1,)}, 'p1': (1,), 
-        'p2': (1,), 'p3': (1,)}}
+        {'params': {'B1': (2, 4), 'B2': (2, 1), 'C1': (4, 2), 'C2': (1, 2), 'D12': (4, 1), 'D21': (1, 4), 'D22': (1, 1), 'X': (4, 4), 'Y': (2, 2), 'bv': (4,), 'bx': (2,), 'by': (1,), 'network': {'layers_0': {'XY': (6, 2), 'a': (1,), 'b': (2,), 'd': (2,)}, 'layers_1': {'XY': (6, 4), 'a': (1,), 'b': (4,), 'd': (4,)}, 'layers_2': {'XY': (8, 4), 'a': (1,), 'b': (4,)}}, 'p': (1,)}}
     """
     
     input_size: int             # nu
@@ -284,6 +279,24 @@ class ContractingR2DN(nn.Module):
         y = x @ e.C2.T + w @ e.D21.T + u @ e.D22.T + e.by
         return x1, y
     
+    def _simulate_explicit_sequence(self, x0, u, e: ExplicitR2DNParams) -> Tuple[Array, Array]:
+        """Simulate an R2DN over a sequence of inputs given explicit params.
+
+        Args:
+            x0: array of initial states, shape is (batches, ...).
+            u: array of inputs as a sequence, shape is (time, batches, ...).
+            e (ExplicitR2DNParams): explicit params.
+
+        Returns:
+            Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
+        """
+        def rollout(carry, ut):
+            xt, = carry
+            xt1, yt = self._explicit_call(xt, ut, e)
+            return (xt1,), yt
+        (x1, ), y = jax.lax.scan(rollout, (x0,), u)
+        return x1, y
+
     def _simulate_sequence(self, x0, u) -> Tuple[Array, Array]:
         """Simulate an R2DN over a sequence of inputs.
 
@@ -295,12 +308,7 @@ class ContractingR2DN(nn.Module):
             Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
         """
         explicit = self._direct_to_explicit()
-        def rollout(carry, ut):
-            xt, = carry
-            xt1, yt = self._explicit_call(xt, ut, explicit)
-            return (xt1,), yt
-        (x1, ), y = jax.lax.scan(rollout, (x0,), u)
-        return x1, y
+        return self._simulate_explicit_sequence(x0, u, explicit)
     
     @nn.nowrap
     def initialize_carry(
@@ -392,6 +400,20 @@ class ContractingR2DN(nn.Module):
         """
         return self.apply(params, x, u, e, method="_explicit_call")
     
+    def simulate_explicit_sequence(self, params: dict, x0, u, e: ExplicitR2DNParams):
+        """Simulate an R2DN over a sequence of inputs given explicit params.
+        
+        Args:
+            params (dict): Flax model parameters dictionary.
+            x0: array of initial states, shape is (batches, ...).
+            u: array of inputs as a sequence, shape is (time, batches, ...).
+            e (ExplicitR2DNParams): explicit params.
+            
+        Returns:
+            Tuple[Array, Array]: (final_state, outputs in (time, batches, ...)).
+        """
+        return self.apply(params, x0, u, e, method="_simulate_explicit_sequence")
+
     def simulate_sequence(self, params: dict, x0, u) -> Tuple[Array, Array]:
         """Simulate an R2DN over a sequence of inputs.
 
