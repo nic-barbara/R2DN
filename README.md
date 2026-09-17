@@ -38,7 +38,7 @@ All plots use LaTeX font as the default. This requires a local install of LaTeX.
 
 To run all the experiments, process the results, and reproduce the figures from the paper:
 
-    run.sh
+    ./run.sh
 
 All code was tested and developed in Ubuntu 26.04 with CUDA 13.2 and Python 3.12.14.
 
